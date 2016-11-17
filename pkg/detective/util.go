@@ -10,13 +10,13 @@ import (
 
 	"github.com/golang/glog"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 )
 
-func isNodeConditionSetAsExpected(node *api.Node, conditionType api.NodeConditionType, wantTrue bool) bool {
+func isNodeConditionSetAsExpected(node *v1.Node, conditionType v1.NodeConditionType, wantTrue bool) bool {
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == conditionType {
-			if (cond.Status == api.ConditionTrue) == wantTrue {
+			if (cond.Status == v1.ConditionTrue) == wantTrue {
 				return true
 			} else {
 				return false
@@ -26,8 +26,8 @@ func isNodeConditionSetAsExpected(node *api.Node, conditionType api.NodeConditio
 	return false
 }
 
-func filterNodes(nodeList *api.NodeList, fn func(node api.Node) bool) {
-	var l []api.Node
+func filterNodes(nodeList *v1.NodeList, fn func(node v1.Node) bool) {
+	var l []v1.Node
 
 	for _, node := range nodeList.Items {
 		if fn(node) {
@@ -61,7 +61,7 @@ func NewKubectlCommand(args ...string) *kubectlBuilder {
 }
 
 func KubectlCmd(args ...string) *exec.Cmd {
-	cmd := exec.Command("kubectl", args...)
+	cmd := exec.Command("monsoonctl", args...)
 	return cmd
 }
 

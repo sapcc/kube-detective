@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 )
 
 func (d *Detective) hitServices(sourceHostNetwork, targetHostNetwork bool) {
 	for _, service := range d.services {
 		for _, pod := range d.pods {
-			if sourceHostNetwork == pod.Spec.SecurityContext.HostNetwork {
+			if sourceHostNetwork == pod.Spec.HostNetwork {
 				if s, err := strconv.ParseBool(service.Labels["hostNetwork"]); err == nil && targetHostNetwork == s {
 					d.dialClusterIP(pod, service)
 				}
@@ -22,7 +22,7 @@ func (d *Detective) hitServices(sourceHostNetwork, targetHostNetwork bool) {
 func (d *Detective) hitExternalIP(sourceHostNetwork, targetHostNetwork bool) {
 	for _, service := range d.services {
 		for _, pod := range d.pods {
-			if sourceHostNetwork == pod.Spec.SecurityContext.HostNetwork {
+			if sourceHostNetwork == pod.Spec.HostNetwork {
 				if s, err := strconv.ParseBool(service.Labels["hostNetwork"]); err == nil && targetHostNetwork == s {
 					d.dialExternalIP(pod, service)
 				}
@@ -34,14 +34,14 @@ func (d *Detective) hitExternalIP(sourceHostNetwork, targetHostNetwork bool) {
 func (d *Detective) hitPods(sourceHostNetwork, targetHostNetwork bool) {
 	for _, source := range d.pods {
 		for _, target := range d.pods {
-			if sourceHostNetwork == source.Spec.SecurityContext.HostNetwork && targetHostNetwork == target.Spec.SecurityContext.HostNetwork {
+			if sourceHostNetwork == source.Spec.HostNetwork && targetHostNetwork == target.Spec.HostNetwork {
 				d.dialPodIP(source, target)
 			}
 		}
 	}
 }
 
-func (d *Detective) dialPodIP(source *api.Pod, target *api.Pod) {
+func (d *Detective) dialPodIP(source *v1.Pod, target *v1.Pod) {
 	_, err := d.dial(source, target.Status.PodIP, PodHttpPort)
 
 	result := "success"
@@ -58,7 +58,7 @@ func (d *Detective) dialPodIP(source *api.Pod, target *api.Pod) {
 	)
 }
 
-func (d *Detective) dialClusterIP(pod *api.Pod, service *api.Service) {
+func (d *Detective) dialClusterIP(pod *v1.Pod, service *v1.Service) {
 	_, err := d.dial(pod, service.Spec.ClusterIP, service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -76,7 +76,7 @@ func (d *Detective) dialClusterIP(pod *api.Pod, service *api.Service) {
 	)
 }
 
-func (d *Detective) dialExternalIP(pod *api.Pod, service *api.Service) {
+func (d *Detective) dialExternalIP(pod *v1.Pod, service *v1.Service) {
 	_, err := d.dial(pod, service.Spec.ExternalIPs[0], service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -94,7 +94,7 @@ func (d *Detective) dialExternalIP(pod *api.Pod, service *api.Service) {
 	)
 }
 
-func (d *Detective) dial(pod *api.Pod, host string, port int32) (string, error) {
-	cmd := fmt.Sprintf("wget --timeout=1 -O - http://%v:%v", host, port)
+func (d *Detective) dial(pod *v1.Pod, host string, port int32) (string, error) {
+	cmd := fmt.Sprintf("wget --timeout=10 -O - http://%v:%v", host, port)
 	return RunHostCmd(d.namespace.Name, pod.Name, cmd)
 }

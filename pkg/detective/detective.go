@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"k8s.io/kubernetes/pkg/api"
-	client "k8s.io/kubernetes/pkg/client/unversioned"
+	"k8s.io/client-go/1.5/kubernetes"
+	"k8s.io/client-go/1.5/pkg/api/v1"
 )
 
 var (
@@ -29,11 +29,11 @@ type Options struct {
 }
 
 type Detective struct {
-	client      *client.Client
-	namespace   *api.Namespace
-	nodes       []api.Node
-	pods        []*api.Pod
-	services    []*api.Service
+	client      *kubernetes.Clientset
+	namespace   *v1.Namespace
+	nodes       []v1.Node
+	pods        []*v1.Pod
+	services    []*v1.Service
 	externalIPs []string
 }
 
