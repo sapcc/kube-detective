@@ -21,7 +21,7 @@ const (
 	WaitForEndpointTimeout         = 1 * time.Minute
 
 	PodHttpPort     = 9376
-	ServiceHttpPort = 9376
+	ServiceHttpPort = 9377
 )
 
 type Options struct {
