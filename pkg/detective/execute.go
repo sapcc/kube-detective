@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"k8s.io/client-go/1.5/pkg/api/v1"
+	core "k8s.io/api/core/v1"
 )
 
 func (d *Detective) hitServices(sourceHostNetwork, targetHostNetwork bool) {
@@ -41,7 +41,7 @@ func (d *Detective) hitPods(sourceHostNetwork, targetHostNetwork bool) {
 	}
 }
 
-func (d *Detective) dialPodIP(source *v1.Pod, target *v1.Pod) {
+func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
 	_, err := d.dial(source, target.Status.PodIP, PodHttpPort)
 
 	result := "success"
@@ -58,7 +58,7 @@ func (d *Detective) dialPodIP(source *v1.Pod, target *v1.Pod) {
 	)
 }
 
-func (d *Detective) dialClusterIP(pod *v1.Pod, service *v1.Service) {
+func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
 	_, err := d.dial(pod, service.Spec.ClusterIP, service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -76,7 +76,7 @@ func (d *Detective) dialClusterIP(pod *v1.Pod, service *v1.Service) {
 	)
 }
 
-func (d *Detective) dialExternalIP(pod *v1.Pod, service *v1.Service) {
+func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 	_, err := d.dial(pod, service.Spec.ExternalIPs[0], service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -94,7 +94,7 @@ func (d *Detective) dialExternalIP(pod *v1.Pod, service *v1.Service) {
 	)
 }
 
-func (d *Detective) dial(pod *v1.Pod, host string, port int32) (string, error) {
+func (d *Detective) dial(pod *core.Pod, host string, port int32) (string, error) {
 	cmd := fmt.Sprintf("wget --timeout=10 -O - http://%v:%v", host, port)
 	return RunHostCmd(d.namespace.Name, pod.Name, cmd)
 }
