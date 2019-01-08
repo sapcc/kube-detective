@@ -18,7 +18,7 @@ GOFILES  := $(wildcard $(GOFILES))
 all: $(BINARIES:%=bin/$(GOOS)/$(GOARCH)/%)
 
 bin/$(GOOS)/$(GOARCH)/%: $(GOFILES) Makefile
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -v -i -o bin/$(GOOS)/$(GOARCH)/$* ./cmd/$*
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -v -i -mod vendor -o bin/$(GOOS)/$(GOARCH)/$* ./cmd/$*
 
 clean:
 	rm -rf bin/*

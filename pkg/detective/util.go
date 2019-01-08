@@ -2,6 +2,7 @@ package detective
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
@@ -9,32 +10,44 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
-func isNodeConditionSetAsExpected(node *core.Node, conditionType core.NodeConditionType, wantTrue bool) bool {
+func (d *Detective) NodeIsSchedulabeleAndRunning(node *core.Node) bool {
+	if node.Spec.Unschedulable {
+		return false
+	}
+
+	if len(node.Status.Conditions) == 0 {
+		return false
+	}
+
+	if !d.nodeFilter.MatchString(node.Name) {
+		return false
+	}
+
 	for _, cond := range node.Status.Conditions {
-		if cond.Type == conditionType {
-			if (cond.Status == core.ConditionTrue) == wantTrue {
-				return true
-			} else {
-				return false
-			}
+		if cond.Type == core.NodeReady && cond.Status != core.ConditionTrue {
+			glog.V(3).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
+			return false
 		}
 	}
-	return false
+	return true
 }
 
-func filterNodes(nodeList *core.NodeList, fn func(node core.Node) bool) {
-	var l []core.Node
-
-	for _, node := range nodeList.Items {
-		if fn(node) {
-			l = append(l, node)
-		}
+func ServiceAccountHasSecret(event watch.Event) (bool, error) {
+	switch event.Type {
+	case watch.Deleted:
+		return false, errors.NewNotFound(schema.GroupResource{Resource: "serviceaccounts"}, "")
 	}
-	nodeList.Items = l
+	switch t := event.Object.(type) {
+	case *core.ServiceAccount:
+		return len(t.Secrets) > 0, nil
+	}
+	return false, nil
 }
 
 func inc(ip net.IP) {
@@ -46,22 +59,22 @@ func inc(ip net.IP) {
 	}
 }
 
-func RunHostCmd(ns, name, cmd string) (string, error) {
-	return RunKubectl("exec", fmt.Sprintf("--namespace=%v", ns), name, "--", "/bin/sh", "-c", cmd)
+func RunHostCmd(ctx context.Context, ns, name, cmd string) (string, error) {
+	return RunKubectl(ctx, "exec", fmt.Sprintf("--namespace=%v", ns), name, "--", "/bin/sh", "-c", cmd)
 }
 
-func RunKubectl(args ...string) (string, error) {
-	return NewKubectlCommand(args...).Exec()
+func RunKubectl(ctx context.Context, args ...string) (string, error) {
+	return NewKubectlCommand(ctx, args...).Exec()
 }
 
-func NewKubectlCommand(args ...string) *kubectlBuilder {
+func NewKubectlCommand(ctx context.Context, args ...string) *kubectlBuilder {
 	b := new(kubectlBuilder)
-	b.cmd = KubectlCmd(args...)
+	b.cmd = KubectlCmd(ctx, args...)
 	return b
 }
 
-func KubectlCmd(args ...string) *exec.Cmd {
-	cmd := exec.Command("kubectl", args...)
+func KubectlCmd(ctx context.Context, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
 	return cmd
 }
 
