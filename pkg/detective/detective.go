@@ -35,6 +35,9 @@ const (
 type Options struct {
 	ExternalCIDR    string
 	NodeFilterRegex string
+	TestPods        bool
+	TestServices    bool
+	TestExternalIPs bool
 }
 
 type Detective struct {
@@ -51,34 +54,51 @@ type Detective struct {
 }
 
 func NewDetective(opts Options) *Detective {
-	if opts.ExternalCIDR == "" {
-		fmt.Println("You need to provide a flag -externalCIDR")
-		os.Exit(1)
+	outerTomb, ctx := tomb.WithContext(context.Background())
+	innerTomb, _ := tomb.WithContext(ctx)
+
+	d := &Detective{
+		tomb:      innerTomb,
+		outerTomb: outerTomb,
+	}
+
+	if opts.TestExternalIPs {
+		if opts.ExternalCIDR == "" {
+			fmt.Println("You need to provide a flag -externalCIDR")
+			os.Exit(1)
+		}
+
+		d.externalIPs = opts.externalIPs()
 	}
 
 	e, err := regexp.Compile(opts.NodeFilterRegex)
 	if err != nil {
 		fmt.Println("The -nodeFilter paramter is not a valid regex")
 		os.Exit(1)
-	}
-
-	outerTomb, ctx := tomb.WithContext(context.Background())
-	innerTomb, _ := tomb.WithContext(ctx)
-
-	d := &Detective{
-		externalIPs: opts.externalIPs(),
-		tomb:        innerTomb,
-		outerTomb:   outerTomb,
-		nodeFilter:  e,
+	} else {
+		d.nodeFilter = e
 	}
 
 	d.tomb.Go(func() error {
-		return d.run()
+		if err := d.setup(opts); err != nil {
+			return err
+		}
+
+		if err := d.execute(opts); err != nil {
+			return err
+		}
+
+		return nil
 	})
 
 	outerTomb.Go(func() error {
 		<-innerTomb.Dead()
-		return d.cleanup()
+		if innerTomb.Err() != nil {
+			d.cleanup()
+			return innerTomb.Err()
+		} else {
+			return d.cleanup()
+		}
 	})
 
 	return d
@@ -92,7 +112,7 @@ func (d *Detective) Wait() error {
 	return d.outerTomb.Wait()
 }
 
-func (d *Detective) run() error {
+func (d *Detective) setup(opts Options) error {
 	fmt.Printf("Welcome to Detective %v\n", VERSION)
 
 	if err := d.createClient(); err != nil {
@@ -117,76 +137,84 @@ func (d *Detective) run() error {
 		return err
 	}
 
-	if err := d.createSevices(); err != nil {
-		return err
+	if opts.TestServices || opts.TestExternalIPs {
+		if err := d.createSevices(opts.TestExternalIPs); err != nil {
+			return err
+		}
+
+		if err := d.waitForServiceEndpoints(); err != nil {
+			return err
+		}
 	}
 
-	if err := d.waitForServiceEndpoints(); err != nil {
-		return err
-	}
-
-	return d.execute()
+	return nil
 }
 
-func (d *Detective) execute() error {
-	fmt.Println("Pod --> Pod")
-	if err := d.hitPods(false, false); err != nil {
-		return err
+func (d *Detective) execute(opts Options) error {
+	if opts.TestPods {
+		fmt.Println("Pod --> Pod")
+		if err := d.hitPods(false, false); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod (hostNetwork) --> Pod")
+		if err := d.hitPods(true, false); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod  --> Pod (hostNetwork)")
+		if err := d.hitPods(false, true); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod (hostNetwork) --> Pod (hostNetwork)")
+		if err := d.hitPods(true, true); err != nil {
+			return err
+		}
 	}
 
-	fmt.Println("Pod (hostNetwork) --> Pod")
-	if err := d.hitPods(true, false); err != nil {
-		return err
+	if opts.TestServices {
+		fmt.Println("Pod --> ClusterIP --> Pod")
+		if err := d.hitServices(false, false); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod")
+		if err := d.hitServices(true, false); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod --> ClusterIP --> Pod (hostNetwork)")
+		if err := d.hitServices(false, true); err != nil {
+			return err
+		}
+
+		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod (hostNetwork)")
+		if err := d.hitServices(true, true); err != nil {
+			return err
+		}
 	}
 
-	fmt.Println("Pod  --> Pod (hostNetwork)")
-	if err := d.hitPods(false, true); err != nil {
-		return err
-	}
+	if opts.TestExternalIPs {
+		fmt.Println("Pod --> ExternalIP --> Pod")
+		if err := d.hitExternalIP(false, false); err != nil {
+			return err
+		}
 
-	fmt.Println("Pod (hostNetwork) --> Pod (hostNetwork)")
-	if err := d.hitPods(true, true); err != nil {
-		return err
-	}
+		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod")
+		if err := d.hitExternalIP(true, false); err != nil {
+			return err
+		}
 
-	fmt.Println("Pod --> ClusterIP --> Pod")
-	if err := d.hitServices(false, false); err != nil {
-		return err
-	}
+		fmt.Println("Pod --> ExternalIP --> Pod (hostNetwork)")
+		if err := d.hitExternalIP(false, true); err != nil {
+			return err
+		}
 
-	fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod")
-	if err := d.hitServices(true, false); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod --> ClusterIP --> Pod (hostNetwork)")
-	if err := d.hitServices(false, true); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod (hostNetwork)")
-	if err := d.hitServices(true, true); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod --> ExternalIP --> Pod")
-	if err := d.hitExternalIP(false, false); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod")
-	if err := d.hitExternalIP(true, false); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod --> ExternalIP --> Pod (hostNetwork)")
-	if err := d.hitExternalIP(false, true); err != nil {
-		return err
-	}
-
-	fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod (hostNetwork)")
-	if err := d.hitExternalIP(true, true); err != nil {
-		return err
+		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod (hostNetwork)")
+		if err := d.hitExternalIP(true, true); err != nil {
+			return err
+		}
 	}
 
 	return nil

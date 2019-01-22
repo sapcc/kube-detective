@@ -16,6 +16,9 @@ var opts detective.Options
 func init() {
 	flag.StringVar(&opts.ExternalCIDR, "externalCIDR", "", "subnet used for external IPs")
 	flag.StringVar(&opts.NodeFilterRegex, "nodeFilter", ".*", "filter node names with this regex")
+	flag.BoolVar(&opts.TestPods, "pods", true, "test pods")
+	flag.BoolVar(&opts.TestServices, "services", true, "test services")
+	flag.BoolVar(&opts.TestExternalIPs, "externalips", false, "test external IPs")
 }
 
 func main() {

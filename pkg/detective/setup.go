@@ -153,7 +153,7 @@ func (d *Detective) waitForPodsRunning() error {
 	}, d.tomb.Dying())
 }
 
-func (d *Detective) createSevices() error {
+func (d *Detective) createSevices(withExternalIP bool) error {
 	glog.V(2).Info("Creating services")
 
 	pods, err := d.informers.Core().V1().Pods().Lister().Pods(d.namespace.Name).List(labels.Everything())
@@ -165,7 +165,8 @@ func (d *Detective) createSevices() error {
 		if !d.tomb.Alive() {
 			return fmt.Errorf("Interrupted")
 		}
-		spec, err := d.createServiceSpec(pod)
+
+		spec, err := d.createServiceSpec(pod, withExternalIP)
 		if err != nil {
 			return err
 		}
@@ -174,21 +175,14 @@ func (d *Detective) createSevices() error {
 		if err != nil {
 			return err
 		}
-		glog.V(3).Infof("  created %v at %v for %v", service.Name, service.Spec.ExternalIPs[0], pod.Name)
+		glog.V(3).Infof("  created %v at %v for %v", service.Name, service.Spec.ExternalIPs, pod.Name)
 	}
 
 	return nil
 }
 
-func (d *Detective) createServiceSpec(pod *core.Pod) (*core.Service, error) {
-	if len(d.externalIPs) == 0 {
-		return nil, fmt.Errorf("No more externalIPs available. Boom!")
-	}
-
-	externalIP := d.externalIPs[0]
-	d.externalIPs = d.externalIPs[1:]
-
-	return &core.Service{
+func (d *Detective) createServiceSpec(pod *core.Pod, withExternalIP bool) (*core.Service, error) {
+	service := &core.Service{
 		ObjectMeta: meta.ObjectMeta{
 			GenerateName: "clusterip-",
 			Labels: map[string]string{
@@ -210,9 +204,19 @@ func (d *Detective) createServiceSpec(pod *core.Pod) (*core.Service, error) {
 				"nodeName":    pod.Spec.NodeName,
 				"hostNetwork": strconv.FormatBool(pod.Spec.HostNetwork),
 			},
-			ExternalIPs: []string{externalIP},
 		},
-	}, nil
+	}
+
+	if withExternalIP {
+		if len(d.externalIPs) == 0 {
+			return nil, fmt.Errorf("No more externalIPs available. Boom!")
+		}
+
+		d.externalIPs = d.externalIPs[1:]
+		service.Spec.ExternalIPs = []string{d.externalIPs[0]}
+	}
+
+	return service, nil
 }
 
 func (d *Detective) waitForServiceEndpoints() error {
