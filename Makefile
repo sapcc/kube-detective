@@ -1,6 +1,6 @@
 DATE    = $(shell date +%Y%m%d%H%M) 
 VERSION = v$(DATE) 
-GOOS    ?= darwin
+GOOS    ?= $(shell go env GOOS)
 GOARCH  ?= amd64
 
 LDFLAGS     := -X github.com/sapcc/kube-detective/pkg/detective.VERSION=$(VERSION) 
