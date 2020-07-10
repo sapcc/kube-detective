@@ -31,8 +31,11 @@ Default load order for `.kubeconfig` applies. If you have a working `kubectl`
 it will just work
 
 ```
-detective -externalCIDR 10.44.11.32/27
+kube-detective -externalCIDR 10.44.11.32/27
 ```
 
 Additional logging can be enabled by setting `--v=2` or `--v=3`.
 
+## Docker image
+
+Docker image with latest binary is available at [sapcc/kube-detective](https://hub.docker.com/repository/docker/sapcc/kube-detective).

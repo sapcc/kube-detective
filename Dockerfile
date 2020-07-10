@@ -8,4 +8,4 @@ RUN make
 
 FROM ubuntu
 LABEL source_repository="https://github.com/sapcc/kube-detective"
-COPY --from=builder /go/src/github.com/sapcc/kube-detective/bin/linux/amd64/detective /kube-detective
+COPY --from=builder /go/src/github.com/sapcc/kube-detective/bin/linux/amd64/kube-detective /kube-detective
