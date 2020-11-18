@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/golang/glog"
-	"github.com/kubernetes/kubernetes/staging/src/k8s.io/client-go/util/workqueue"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/util/workqueue"
 )
 
 const (
