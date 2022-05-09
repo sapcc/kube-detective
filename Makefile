@@ -13,19 +13,24 @@ PACKAGES := $(shell find $(CMDDIR) $(PKGDIR) -type d)
 GOFILES  := $(addsuffix /*.go,$(PACKAGES))
 GOFILES  := $(wildcard $(GOFILES))            
 
-.PHONY: all clean 
+.PHONY: FORCE all 
 
 all: $(BINARIES:%=bin/$(GOOS)/$(GOARCH)/%)
 
 bin/$(GOOS)/$(GOARCH)/%: $(GOFILES) Makefile
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -v -o bin/$(GOOS)/$(GOARCH)/kube-detective ./cmd/$*
 
-release: $(GOFILES) Makefile
+release: FORCE binaries gh-release
+
+binaries: 
 	GOOS=linux GOARCH=amd64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_linux_amd64 ./cmd/detective
 	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_windows_amd64.exe ./cmd/detective
 	GOOS=darwin GOARCH=amd64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_darwin_amd64 ./cmd/detective
 	GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_darwin_arm64 ./cmd/detective
 
-clean:
+gh-release:
+	gh release create $(VERSION) bin/*
+
+clean: FORCE
 	rm -rf bin/*
 
