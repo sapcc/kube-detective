@@ -1,6 +1,7 @@
 package detective
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
@@ -28,7 +29,7 @@ func (d *Detective) createNamespace() error {
 		Status: core.NamespaceStatus{},
 	}
 
-	ns, err := d.client.CoreV1().Namespaces().Create(spec)
+	ns, err := d.client.CoreV1().Namespaces().Create(context.TODO(), spec, meta.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,7 @@ func (d *Detective) createNamespace() error {
 
 func (d *Detective) deleteNamespace() error {
 	glog.V(2).Infof("Deleting Namespace")
-	err := d.client.CoreV1().Namespaces().Delete(d.namespace.Name, meta.NewDeleteOptions(0))
+	err := d.client.CoreV1().Namespaces().Delete(context.TODO(), d.namespace.Name, meta.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -55,10 +56,10 @@ func (d *Detective) waitForServiceAccountInNamespace() error {
 	opts := meta.SingleObject(meta.ObjectMeta{Name: "default"})
 	lw := &cache.ListWatch{
 		ListFunc: func(options meta.ListOptions) (runtime.Object, error) {
-			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).List(opts)
+			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).List(context.TODO(), opts)
 		},
 		WatchFunc: func(options meta.ListOptions) (watch.Interface, error) {
-			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).Watch(opts)
+			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).Watch(context.TODO(), opts)
 		},
 	}
 
@@ -72,7 +73,7 @@ func (d *Detective) waitForServiceAccountInNamespace() error {
 }
 
 func (d *Detective) createPods() error {
-	nodes, err := d.informers.Core().V1().Nodes().Lister().ListWithPredicate(d.NodeIsSchedulabeleAndRunning)
+	nodes, err := d.ListNodesWithPredicate(d.NodeIsSchedulabeleAndRunning)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (d *Detective) createPods() error {
 }
 
 func (d *Detective) createPod(pod *core.Pod) (*core.Pod, error) {
-	pod, err := d.client.CoreV1().Pods(d.namespace.Name).Create(pod)
+	pod, err := d.client.CoreV1().Pods(d.namespace.Name).Create(context.TODO(), pod, meta.CreateOptions{})
 	if err == nil {
 		glog.V(3).Infof("  created %v on %v", pod.Name, pod.Spec.NodeName)
 	}
@@ -102,6 +103,7 @@ func (d *Detective) createPod(pod *core.Pod) (*core.Pod, error) {
 }
 
 func (d *Detective) createPodSpec(node *core.Node, hostNetwork bool) *core.Pod {
+	var gracePeriod int64 = 2
 	return &core.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			GenerateName: "server-",
@@ -114,12 +116,13 @@ func (d *Detective) createPodSpec(node *core.Node, hostNetwork bool) *core.Pod {
 			Containers: []core.Container{
 				{
 					Name:  "server",
-					Image: "gcr.io/google_containers/serve_hostname:1.2",
+					Image: d.testImage,
 					Ports: []core.ContainerPort{{ContainerPort: 9376}},
 				},
 			},
-			NodeName:    node.Name,
-			HostNetwork: hostNetwork,
+			NodeName:                      node.Name,
+			HostNetwork:                   hostNetwork,
+			TerminationGracePeriodSeconds: &gracePeriod,
 		},
 	}
 }
@@ -127,7 +130,7 @@ func (d *Detective) createPodSpec(node *core.Node, hostNetwork bool) *core.Pod {
 func (d *Detective) waitForPodsRunning() error {
 	glog.V(2).Info("Waiting for running Pods")
 
-	nodes, err := d.informers.Core().V1().Nodes().Lister().ListWithPredicate(d.NodeIsSchedulabeleAndRunning)
+	nodes, err := d.ListNodesWithPredicate(d.NodeIsSchedulabeleAndRunning)
 	if err != nil {
 		return err
 	}
@@ -171,7 +174,7 @@ func (d *Detective) createSevices(withExternalIP bool) error {
 			return err
 		}
 
-		service, err := d.client.CoreV1().Services(d.namespace.Name).Create(spec)
+		service, err := d.client.CoreV1().Services(d.namespace.Name).Create(context.TODO(), spec, meta.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -222,7 +225,7 @@ func (d *Detective) createServiceSpec(pod *core.Pod, withExternalIP bool) (*core
 func (d *Detective) waitForServiceEndpoints() error {
 	glog.V(2).Info("Waiting for service endpoints")
 
-	nodes, err := d.informers.Core().V1().Nodes().Lister().ListWithPredicate(d.NodeIsSchedulabeleAndRunning)
+	nodes, err := d.ListNodesWithPredicate(d.NodeIsSchedulabeleAndRunning)
 	if err != nil {
 		return err
 	}

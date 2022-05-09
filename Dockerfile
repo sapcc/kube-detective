@@ -1,4 +1,4 @@
-FROM golang:1.13.5 AS builder
+FROM golang:1.17.9 AS builder
 
 WORKDIR /go/src/github.com/sapcc/kube-detective
 ADD go.mod go.sum ./

@@ -11,7 +11,9 @@ import (
 
 	"github.com/golang/glog"
 	core "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 )
@@ -36,6 +38,22 @@ func (d *Detective) NodeIsSchedulabeleAndRunning(node *core.Node) bool {
 		}
 	}
 	return true
+}
+
+func (d *Detective) ListNodesWithPredicate(predicate func(node *v1.Node) bool) ([]*v1.Node, error) {
+	nodes, err := d.informers.Core().V1().Nodes().Lister().List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []*v1.Node
+	for i := range nodes {
+		if predicate(nodes[i]) {
+			filtered = append(filtered, nodes[i])
+		}
+	}
+
+	return filtered, nil
 }
 
 func ServiceAccountHasSecret(event watch.Event) (bool, error) {

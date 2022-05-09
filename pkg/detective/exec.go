@@ -2,13 +2,14 @@ package detective
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/url"
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
@@ -94,7 +95,7 @@ func (d *Detective) ExecShellInContainer(namespace, podName, containerName strin
 }
 
 func (d *Detective) ExecCommandInPod(namespace, podName string, cmd ...string) string {
-	pod, err := d.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := d.client.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Sprintf("failed to get pod %s/%s: %s", namespace, podName, err)
 	}
@@ -102,7 +103,7 @@ func (d *Detective) ExecCommandInPod(namespace, podName string, cmd ...string) s
 }
 
 func (d *Detective) ExecCommandInPodWithFullOutput(namespace, podName string, cmd ...string) (string, string, error) {
-	pod, err := d.client.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+	pod, err := d.client.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get pod")
 	}

@@ -36,6 +36,7 @@ const (
 type Options struct {
 	ExternalCIDR    string
 	NodeFilterRegex string
+	TestImage       string
 	TestPods        bool
 	TestServices    bool
 	TestExternalIPs bool
@@ -52,6 +53,7 @@ type Detective struct {
 
 	tomb      *tomb.Tomb
 	outerTomb *tomb.Tomb
+	testImage string
 }
 
 func NewDetective(opts Options) *Detective {
@@ -79,6 +81,8 @@ func NewDetective(opts Options) *Detective {
 	} else {
 		d.nodeFilter = e
 	}
+
+	d.testImage = opts.TestImage
 
 	d.tomb.Go(func() error {
 		if err := d.setup(opts); err != nil {

@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/sapcc/kube-detective/pkg/detective"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 var opts detective.Options
@@ -19,6 +19,7 @@ func init() {
 	flag.BoolVar(&opts.TestPods, "pods", true, "test pods")
 	flag.BoolVar(&opts.TestServices, "services", true, "test services")
 	flag.BoolVar(&opts.TestExternalIPs, "externalips", false, "test external IPs")
+	flag.StringVar(&opts.TestImage, "test-image", "gcr.io/google_containers/serve_hostname:1.2", "test external IPs")
 }
 
 func main() {
