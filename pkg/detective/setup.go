@@ -12,12 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
-	tools_watch "k8s.io/client-go/tools/watch"
 )
 
 func (d *Detective) createNamespace() error {
@@ -29,7 +25,7 @@ func (d *Detective) createNamespace() error {
 		Status: core.NamespaceStatus{},
 	}
 
-	ns, err := d.client.CoreV1().Namespaces().Create(context.TODO(), spec, meta.CreateOptions{})
+	ns, err := d.client.CoreV1().Namespaces().Create(d.tomb.Context(nil), spec, meta.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -42,7 +38,7 @@ func (d *Detective) createNamespace() error {
 
 func (d *Detective) deleteNamespace() error {
 	glog.V(2).Infof("Deleting Namespace")
-	err := d.client.CoreV1().Namespaces().Delete(context.TODO(), d.namespace.Name, meta.DeleteOptions{})
+	err := d.client.CoreV1().Namespaces().Delete(context.Background(), d.namespace.Name, meta.DeleteOptions{})
 	if err != nil {
 		return err
 	}
@@ -53,23 +49,10 @@ func (d *Detective) deleteNamespace() error {
 func (d *Detective) waitForServiceAccountInNamespace() error {
 	glog.V(2).Info("Waiting for Service Account")
 
-	opts := meta.SingleObject(meta.ObjectMeta{Name: "default"})
-	lw := &cache.ListWatch{
-		ListFunc: func(options meta.ListOptions) (runtime.Object, error) {
-			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).List(context.TODO(), opts)
-		},
-		WatchFunc: func(options meta.ListOptions) (watch.Interface, error) {
-			return d.client.CoreV1().ServiceAccounts(d.namespace.Name).Watch(context.TODO(), opts)
-		},
-	}
-
-	_, err := tools_watch.UntilWithSync(d.tomb.Context(nil), lw, &core.ServiceAccount{}, nil, ServiceAccountHasSecret)
-
-	if err == nil {
-		glog.V(3).Infof("  available %v", "default")
-	}
-
-	return err
+	return wait.PollImmediateUntil(1*time.Second, func() (done bool, err error) {
+		_, err = d.client.CoreV1().ServiceAccounts(d.namespace.Name).Get(d.tomb.Context(nil), "default", meta.GetOptions{})
+		return err == nil, nil
+	}, d.tomb.Dying())
 }
 
 func (d *Detective) createPods() error {
@@ -95,7 +78,7 @@ func (d *Detective) createPods() error {
 }
 
 func (d *Detective) createPod(pod *core.Pod) (*core.Pod, error) {
-	pod, err := d.client.CoreV1().Pods(d.namespace.Name).Create(context.TODO(), pod, meta.CreateOptions{})
+	pod, err := d.client.CoreV1().Pods(d.namespace.Name).Create(d.tomb.Context(nil), pod, meta.CreateOptions{})
 	if err == nil {
 		glog.V(3).Infof("  created %v on %v", pod.Name, pod.Spec.NodeName)
 	}
@@ -174,7 +157,7 @@ func (d *Detective) createSevices(withExternalIP bool) error {
 			return err
 		}
 
-		service, err := d.client.CoreV1().Services(d.namespace.Name).Create(context.TODO(), spec, meta.CreateOptions{})
+		service, err := d.client.CoreV1().Services(d.namespace.Name).Create(d.tomb.Context(nil), spec, meta.CreateOptions{})
 		if err != nil {
 			return err
 		}

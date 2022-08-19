@@ -12,10 +12,7 @@ import (
 	"github.com/golang/glog"
 	core "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
 )
 
 func (d *Detective) NodeIsSchedulabeleAndRunning(node *core.Node) bool {
@@ -54,18 +51,6 @@ func (d *Detective) ListNodesWithPredicate(predicate func(node *v1.Node) bool) (
 	}
 
 	return filtered, nil
-}
-
-func ServiceAccountHasSecret(event watch.Event) (bool, error) {
-	switch event.Type {
-	case watch.Deleted:
-		return false, errors.NewNotFound(schema.GroupResource{Resource: "serviceaccounts"}, "")
-	}
-	switch t := event.Object.(type) {
-	case *core.ServiceAccount:
-		return len(t.Secrets) > 0, nil
-	}
-	return false, nil
 }
 
 func inc(ip net.IP) {

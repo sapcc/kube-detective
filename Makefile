@@ -29,7 +29,7 @@ binaries:
 	GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_darwin_arm64 ./cmd/detective
 
 gh-release:
-	gh release create $(VERSION) bin/*
+	gh release create $(VERSION) bin/detective*
 
 clean: FORCE
 	rm -rf bin/*
