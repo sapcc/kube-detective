@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kube-detective
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: detective
+          image: #BUILD-ME
+          command:
+            - /kube-detective
+          args:
+            - -externalips
+            - -externalCIDR=169.253.0.0/23
