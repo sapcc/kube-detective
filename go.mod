@@ -13,4 +13,4 @@ require (
 	k8s.io/klog/v2 v2.9.0
 )
 
-go 1.13
+go 1.19
