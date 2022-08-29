@@ -6,7 +6,7 @@ RUN go mod download
 ADD . .
 RUN make
 
-FROM alpine:3.15
+FROM alpine:3.16
 LABEL source_repository="https://github.com/sapcc/kube-detective"
 RUN apk add --no-cache \
         ca-certificates \
