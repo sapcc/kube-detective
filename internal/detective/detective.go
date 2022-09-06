@@ -40,6 +40,10 @@ type Options struct {
 	TestPods        bool
 	TestServices    bool
 	TestExternalIPs bool
+
+	MetricsPort int
+	HealthPort  int
+	KubeContext string
 }
 
 type Detective struct {

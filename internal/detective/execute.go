@@ -2,6 +2,7 @@ package detective
 
 import (
 	"fmt"
+	"github.com/sapcc/kube-detective/internal/metrics"
 	"strconv"
 
 	"github.com/golang/glog"
@@ -12,6 +13,15 @@ import (
 
 const (
 	WORKER_COUNT = 10
+)
+
+var (
+	sourceNode string
+	destNode   string
+	sourcePod  string
+	destPod    string
+	clusterIP  string
+	externalIP string
 )
 
 type ServiceTarget struct {
@@ -126,58 +136,74 @@ func (d *Detective) hitPods(sourceHostNetwork, targetHostNetwork bool) error {
 func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
 	_, err := d.dial(source, target.Status.PodIP, PodHttpPort)
 
+	sourceNode = source.Spec.NodeName
+	destNode = target.Spec.NodeName
+	sourcePod = source.Status.PodIP
+	destPod = target.Status.PodIP
+
 	result := "success"
+	metrics.TestTotal.WithLabelValues().Inc()
+	metrics.PodIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod).Inc()
 	if err != nil {
+		metrics.ErrorTotal.WithLabelValues().Inc()
+		metrics.PodIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod).Inc()
+
 		glog.V(3).Infof("Error: '%v'", err)
 		result = "failure"
 	}
 
-	fmt.Printf("[%v] %30v --> %-30v   %-15v --> %-15v\n",
-		result,
-		source.Spec.NodeName,
-		target.Spec.NodeName,
-		source.Status.PodIP,
-		target.Status.PodIP,
-	)
+	fmt.Printf("[%v] %30v --> %-30v   %-15v --> %-15v\n", result, sourceNode, destNode, sourcePod, destPod)
 }
 
 func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
 	_, err := d.dial(pod, service.Spec.ClusterIP, service.Spec.Ports[0].Port)
 
+	sourceNode = pod.Spec.NodeName
+	destNode = service.Labels["nodeName"]
+	sourcePod = pod.Status.PodIP
+	destPod = service.Labels["podIP"]
+	clusterIP = service.Spec.ClusterIP
+
 	result := "success"
+	metrics.TestTotal.WithLabelValues().Inc()
+	metrics.ClusterIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod, clusterIP).Inc()
+
 	if err != nil {
 		glog.V(3).Infof("Error: '%s'", err)
 
+		metrics.ErrorTotal.WithLabelValues().Inc()
+		metrics.ClusterIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod, clusterIP).Inc()
 		result = "failure"
 	}
 
 	fmt.Printf("[%v] %30v --> ClusterIP --> %-30v   %-15v --> %-15v --> %-15v\n",
-		result,
-		pod.Spec.NodeName,
-		service.Labels["nodeName"],
-		pod.Status.PodIP,
-		service.Spec.ClusterIP,
-		service.Labels["podIP"],
+		result, sourceNode, destNode, sourcePod, clusterIP, destPod,
 	)
 }
 
 func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 	_, err := d.dial(pod, service.Spec.ExternalIPs[0], service.Spec.Ports[0].Port)
 
+	sourceNode = pod.Spec.NodeName
+	destNode = service.Labels["nodeName"]
+	sourcePod = pod.Status.PodIP
+	destPod = service.Labels["podIP"]
+	externalIP = service.Spec.ExternalIPs[0]
+
 	result := "success"
+	metrics.TestTotal.WithLabelValues().Inc()
+	metrics.ExternalIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod, externalIP).Inc()
+
 	if err != nil {
 		glog.V(3).Infof("Error: '%s'", err)
 
+		metrics.ErrorTotal.WithLabelValues().Inc()
+		metrics.ExternalIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod, externalIP).Inc()
 		result = "failure"
 	}
 
 	fmt.Printf("[%v] %30v --> ExternalIP --> %-30v   %-15v --> %-15v --> %-15v\n",
-		result,
-		pod.Spec.NodeName,
-		service.Labels["nodeName"],
-		pod.Status.PodIP,
-		service.Spec.ExternalIPs[0],
-		service.Labels["podIP"],
+		result, sourceNode, destNode, sourcePod, externalIP, destPod,
 	)
 }
 
