@@ -29,6 +29,10 @@ binaries:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_darwin_amd64 ./cmd/detective
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(GOFLAGS) -v -o bin/$(BINARIES)_darwin_arm64 ./cmd/detective
 
+run:
+	CGO_ENABLED=0 go build -o kube-detective cmd/detective/main.go
+	./kube-detective --test-image keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/sapcc/serve-hostname-amd64:1.2-alpine --externalips --externalCIDR=169.253.0.0/24
+
 gh-release:
 	gh release create $(VERSION) bin/detective*
 
