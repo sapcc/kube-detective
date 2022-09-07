@@ -31,8 +31,11 @@ func main() {
 	flag.Parse()
 
 	registry := prometheus.NewRegistry()
-	registry.MustRegister(metrics.TestTotal, metrics.ErrorTotal, metrics.PodIPTest, metrics.PodIPTestError,
-		metrics.ClusterIPTest, metrics.ClusterIPTestError, metrics.ExternalIPTest, metrics.ExternalIPTestError)
+	registry.MustRegister(metrics.TestTotal, metrics.ErrorTotal, metrics.PodIPTest,
+		metrics.ClusterIPTest, metrics.ExternalIPTest)
+
+	// ensure counters are reported
+	metrics.ErrorTotal.WithLabelValues().Add(0)
 
 	pusher := push.New(opts.PushGateway, "kube_detective").Gatherer(registry)
 

@@ -17,27 +17,12 @@ var PodIPTest = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Help: "Number of pod to pod tests",
 }, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip"})
 
-var PodIPTestError = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "kube_detective_dial_pod_ip_error_total",
-	Help: "Number of pod to pod test errors",
-}, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip"})
-
 var ClusterIPTest = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Name: "kube_detective_dial_cluster_ip_total",
 	Help: "Number of pod to cluster ip tests",
 }, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip", "cluster_ip"})
 
-var ClusterIPTestError = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "kube_detective_dial_cluster_ip_error_total",
-	Help: "Number of pod to cluster ip test errors",
-}, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip", "cluster_ip"})
-
 var ExternalIPTest = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Name: "kube_detective_dial_external_ip_total",
 	Help: "Number of pod to external ip tests",
-}, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip", "external_ip"})
-
-var ExternalIPTestError = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "kube_detective_dial_external_ip_error_total",
-	Help: "Number of pod to external ip test errors",
 }, []string{"source_node", "destination_node", "source_pod_ip", "destination_pod_ip", "external_ip"})

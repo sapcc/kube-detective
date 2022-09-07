@@ -129,7 +129,7 @@ func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
 	metrics.PodIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod).Inc()
 	if err != nil {
 		metrics.ErrorTotal.WithLabelValues().Inc()
-		metrics.PodIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod).Inc()
+		metrics.PodIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod).Add(0)
 
 		glog.V(3).Infof("Error: '%v'", err)
 		result = "failure"
@@ -155,7 +155,7 @@ func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
 		glog.V(3).Infof("Error: '%s'", err)
 
 		metrics.ErrorTotal.WithLabelValues().Inc()
-		metrics.ClusterIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod, clusterIP).Inc()
+		metrics.ClusterIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod, clusterIP).Add(0)
 		result = "failure"
 	}
 
@@ -181,7 +181,7 @@ func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 		glog.V(3).Infof("Error: '%s'", err)
 
 		metrics.ErrorTotal.WithLabelValues().Inc()
-		metrics.ExternalIPTestError.WithLabelValues(sourceNode, destNode, sourcePod, destPod, externalIP).Inc()
+		metrics.ExternalIPTest.WithLabelValues(sourceNode, destNode, sourcePod, destPod, externalIP).Add(0)
 		result = "failure"
 	}
 
