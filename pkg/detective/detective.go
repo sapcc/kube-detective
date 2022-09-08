@@ -2,13 +2,12 @@ package detective
 
 import (
 	"context"
-	"fmt"
+	"github.com/go-logr/logr"
 	"net"
 	"os"
 	"regexp"
 	"time"
 
-	"github.com/golang/glog"
 	tomb "gopkg.in/tomb.v2"
 	core "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -54,29 +53,34 @@ type Detective struct {
 	tomb      *tomb.Tomb
 	outerTomb *tomb.Tomb
 	testImage string
+
+	log logr.Logger
+	opts Options
 }
 
-func NewDetective(opts Options) *Detective {
+func NewDetective(opts Options, logger logr.Logger) *Detective {
 	outerTomb, ctx := tomb.WithContext(context.Background())
 	innerTomb, _ := tomb.WithContext(ctx)
 
 	d := &Detective{
 		tomb:      innerTomb,
 		outerTomb: outerTomb,
+		log:       logger,
+		opts:      opts,
 	}
 
 	if opts.TestExternalIPs {
-		if opts.ExternalCIDR == "" {
-			fmt.Println("You need to provide a flag -externalCIDR")
+		var err error
+		d.externalIPs, err = d.checkExternalIPs(opts)
+		if err != nil {
+			d.log.Error(err, "error checking external ips")
 			os.Exit(1)
 		}
-
-		d.externalIPs = opts.externalIPs()
 	}
 
 	e, err := regexp.Compile(opts.NodeFilterRegex)
 	if err != nil {
-		fmt.Println("The -nodeFilter paramter is not a valid regex")
+		d.log.Error(err, "error compiling regex")
 		os.Exit(1)
 	} else {
 		d.nodeFilter = e
@@ -84,29 +88,32 @@ func NewDetective(opts Options) *Detective {
 
 	d.testImage = opts.TestImage
 
+
+	return d
+}
+
+func (d *Detective) Run() {
 	d.tomb.Go(func() error {
-		if err := d.setup(opts); err != nil {
+		if err := d.setup(d.opts); err != nil {
 			return err
 		}
 
-		if err := d.execute(opts); err != nil {
+		if err := d.execute(d.opts); err != nil {
 			return err
 		}
 
 		return nil
 	})
 
-	outerTomb.Go(func() error {
-		<-innerTomb.Dead()
-		if innerTomb.Err() != nil {
+	d.outerTomb.Go(func() error {
+		<-d.tomb.Dead()
+		if d.tomb.Err() != nil {
 			d.cleanup()
-			return innerTomb.Err()
+			return d.tomb.Err()
 		} else {
 			return d.cleanup()
 		}
 	})
-
-	return d
 }
 
 func (d *Detective) Kill() {
@@ -118,7 +125,8 @@ func (d *Detective) Wait() error {
 }
 
 func (d *Detective) setup(opts Options) error {
-	fmt.Printf("Welcome to Detective %v\n", VERSION)
+	//fmt.Printf("Welcome to Detective %v\n", VERSION)
+	d.log.Info("welcome to detective", "version", VERSION)
 
 	if err := d.createClient(); err != nil {
 		return err
@@ -157,66 +165,66 @@ func (d *Detective) setup(opts Options) error {
 
 func (d *Detective) execute(opts Options) error {
 	if opts.TestPods {
-		fmt.Println("Pod --> Pod")
+		d.log.Info("Pod --> Pod")
 		if err := d.hitPods(false, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> Pod")
+		d.log.Info("Pod (hostNetwork) --> Pod")
 		if err := d.hitPods(true, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod  --> Pod (hostNetwork)")
+		d.log.Info("Pod  --> Pod (hostNetwork)")
 		if err := d.hitPods(false, true); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> Pod (hostNetwork)")
+		d.log.Info("Pod (hostNetwork) --> Pod (hostNetwork)")
 		if err := d.hitPods(true, true); err != nil {
 			return err
 		}
 	}
 
 	if opts.TestServices {
-		fmt.Println("Pod --> ClusterIP --> Pod")
+		d.log.Info("Pod --> ClusterIP --> Pod")
 		if err := d.hitServices(false, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod")
+		d.log.Info("Pod (hostNetwork) --> ClusterIP --> Pod")
 		if err := d.hitServices(true, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod --> ClusterIP --> Pod (hostNetwork)")
+		d.log.Info("Pod --> ClusterIP --> Pod (hostNetwork)")
 		if err := d.hitServices(false, true); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod (hostNetwork)")
+		d.log.Info("Pod (hostNetwork) --> ClusterIP --> Pod (hostNetwork)")
 		if err := d.hitServices(true, true); err != nil {
 			return err
 		}
 	}
 
 	if opts.TestExternalIPs {
-		fmt.Println("Pod --> ExternalIP --> Pod")
+		d.log.Info("Pod --> ExternalIP --> Pod")
 		if err := d.hitExternalIP(false, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod")
+		d.log.Info("Pod (hostNetwork) --> ExternalIP --> Pod")
 		if err := d.hitExternalIP(true, false); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod --> ExternalIP --> Pod (hostNetwork)")
+		d.log.Info("Pod --> ExternalIP --> Pod (hostNetwork)")
 		if err := d.hitExternalIP(false, true); err != nil {
 			return err
 		}
 
-		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod (hostNetwork)")
+		d.log.Info("Pod (hostNetwork) --> ExternalIP --> Pod (hostNetwork)")
 		if err := d.hitExternalIP(true, true); err != nil {
 			return err
 		}
@@ -226,18 +234,18 @@ func (d *Detective) execute(opts Options) error {
 }
 
 func (d *Detective) cleanup() error {
-	glog.V(2).Infof("Cleaning Up")
+	d.log.Info("Cleaning Up")
 	if d.namespace != nil {
 		return d.deleteNamespace()
 	}
 	return nil
 }
 
-func (o *Options) externalIPs() []string {
+func (d *Detective) checkExternalIPs(o Options) ([]string,error) {
 	ip, ipnet, err := net.ParseCIDR(o.ExternalCIDR)
 	if err != nil {
-		fmt.Printf("Couldn't parse externalCIDR: %v\n", err)
-		os.Exit(1)
+		d.log.Error(err, "error parsing externalCIDR")
+		return nil, err
 	}
 
 	var ips []string
@@ -245,11 +253,12 @@ func (o *Options) externalIPs() []string {
 		ips = append(ips, ip.String())
 	}
 
-	return ips
+	return ips, nil
 }
 
 func (d *Detective) createClient() error {
-	glog.V(2).Infof("Creating Client")
+	//glog.V(2).Infof("Creating Client")
+	d.log.Info("creating client")
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	overrides := &clientcmd.ConfigOverrides{}
 
@@ -265,15 +274,19 @@ func (d *Detective) createClient() error {
 
 	d.client = client
 	d.config = config
-	glog.V(3).Infof("  Host: %s", config.Host)
-	glog.V(3).Infof("  User: %s", config.Username)
-	glog.V(3).Infof("  Key:  %s", config.KeyFile)
+	//glog.V(3).Infof("  Host: %s", config.Host)
+	d.log.Info("", "host", config.Host)
+	//glog.V(3).Infof("  User: %s", config.Username)
+	d.log.Info("", "user", config.Username)
+	//glog.V(3).Infof("  Key:  %s", config.KeyFile)
+	d.log.Info("", "key", config.KeyFile)
 
 	return nil
 }
 
 func (d *Detective) createInformers() {
-	glog.V(2).Infof("Creating Informers")
+	//glog.V(2).Infof("Creating Informers")
+	d.log.Info("creating informers")
 
 	d.informers = informers.NewSharedInformerFactoryWithOptions(d.client, InformerResyncPeriod, informers.WithNamespace(d.namespace.Name))
 	nodes := d.informers.Core().V1().Nodes().Informer()
@@ -283,6 +296,7 @@ func (d *Detective) createInformers() {
 
 	d.informers.Start(d.tomb.Dying())
 
-	glog.V(2).Infof("Waiting for Caches")
+	//glog.V(2).Infof("Waiting for Caches")
+	d.log.Info("waiting for caches")
 	cache.WaitForCacheSync(d.tomb.Dying(), nodes.HasSynced, pods.HasSynced, services.HasSynced, endpoints.HasSynced)
 }

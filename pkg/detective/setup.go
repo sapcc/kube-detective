@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/glog"
-
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +15,8 @@ import (
 )
 
 func (d *Detective) createNamespace() error {
-	glog.V(2).Infof("Creating Namespace")
+	//glog.V(2).Infof("Creating Namespace")
+	d.log.Info("Creating Namespace")
 	spec := &core.Namespace{
 		ObjectMeta: meta.ObjectMeta{
 			GenerateName: "detective-",
@@ -31,23 +30,27 @@ func (d *Detective) createNamespace() error {
 	}
 
 	d.namespace = ns
-	glog.V(3).Infof("  created %v", ns.Name)
+	//glog.V(3).Infof("  created %v", ns.Name)
+	d.log.Info("created", "namespace", ns.Name)
 
 	return nil
 }
 
 func (d *Detective) deleteNamespace() error {
-	glog.V(2).Infof("Deleting Namespace")
+	//glog.V(2).Infof("Deleting Namespace")
+	d.log.Info("deleting namespace")
 	err := d.client.CoreV1().Namespaces().Delete(context.Background(), d.namespace.Name, meta.DeleteOptions{})
 	if err != nil {
 		return err
 	}
-	glog.V(3).Infof("  deleted %v", d.namespace.Name)
+	//glog.V(3).Infof("  deleted %v", d.namespace.Name)
+	d.log.Info("deleted namespace", "namespace", d.namespace.Name)
 	return nil
 }
 
 func (d *Detective) waitForServiceAccountInNamespace() error {
-	glog.V(2).Info("Waiting for Service Account")
+	//glog.V(2).Info("Waiting for Service Account")
+	d.log.Info("waiting for service account")
 
 	return wait.PollImmediateUntil(1*time.Second, func() (done bool, err error) {
 		_, err = d.client.CoreV1().ServiceAccounts(d.namespace.Name).Get(d.tomb.Context(nil), "default", meta.GetOptions{})
@@ -61,7 +64,8 @@ func (d *Detective) createPods() error {
 		return err
 	}
 
-	glog.V(2).Info("Creating pods")
+	//glog.V(2).Info("Creating pods")
+	d.log.Info("creating pods")
 	for _, node := range nodes {
 		if !d.tomb.Alive() {
 			return fmt.Errorf("Interrupted")
@@ -80,7 +84,8 @@ func (d *Detective) createPods() error {
 func (d *Detective) createPod(pod *core.Pod) (*core.Pod, error) {
 	pod, err := d.client.CoreV1().Pods(d.namespace.Name).Create(d.tomb.Context(nil), pod, meta.CreateOptions{})
 	if err == nil {
-		glog.V(3).Infof("  created %v on %v", pod.Name, pod.Spec.NodeName)
+		//glog.V(3).Infof("  created %v on %v", pod.Name, pod.Spec.NodeName)
+		d.log.Info("created", "pod", pod.Name, "node", pod.Spec.NodeName)
 	}
 	return pod, err
 }
@@ -111,7 +116,8 @@ func (d *Detective) createPodSpec(node *core.Node, hostNetwork bool) *core.Pod {
 }
 
 func (d *Detective) waitForPodsRunning() error {
-	glog.V(2).Info("Waiting for running Pods")
+	//glog.V(2).Info("Waiting for running Pods")
+	d.log.Info("waiting for running pods")
 
 	nodes, err := d.ListNodesWithPredicate(d.NodeIsSchedulabeleAndRunning)
 	if err != nil {
@@ -134,13 +140,15 @@ func (d *Detective) waitForPodsRunning() error {
 			}
 		}
 
-		glog.V(3).Infof("  %v/%v pods running", running, len(nodes)*2)
+		//glog.V(3).Infof("  %v/%v pods running", running, len(nodes)*2)
+		d.log.Info("pods", "running", running, "all pods", len(nodes)*2)
 		return running == len(nodes)*2, nil
 	}, d.tomb.Dying())
 }
 
 func (d *Detective) createSevices(withExternalIP bool) error {
-	glog.V(2).Info("Creating services")
+	//glog.V(2).Info("Creating services")
+	d.log.Info("creating services")
 
 	pods, err := d.informers.Core().V1().Pods().Lister().Pods(d.namespace.Name).List(labels.Everything())
 	if err != nil {
@@ -161,7 +169,8 @@ func (d *Detective) createSevices(withExternalIP bool) error {
 		if err != nil {
 			return err
 		}
-		glog.V(3).Infof("  created %v at %v for %v", service.Name, service.Spec.ExternalIPs, pod.Name)
+		//glog.V(3).Infof("  created %v at %v for %v", service.Name, service.Spec.ExternalIPs, pod.Name)
+		d.log.Info("created services", "name", service.Name, "ip", service.Spec.ExternalIPs, "pod", pod.Name)
 	}
 
 	return nil
@@ -206,7 +215,8 @@ func (d *Detective) createServiceSpec(pod *core.Pod, withExternalIP bool) (*core
 }
 
 func (d *Detective) waitForServiceEndpoints() error {
-	glog.V(2).Info("Waiting for service endpoints")
+	//glog.V(2).Info("Waiting for service endpoints")
+	d.log.Info("waiting for service endpoints")
 
 	nodes, err := d.ListNodesWithPredicate(d.NodeIsSchedulabeleAndRunning)
 	if err != nil {
@@ -219,18 +229,22 @@ func (d *Detective) waitForServiceEndpoints() error {
 			return false, err
 		}
 
-		glog.V(3).Infof("  found %v nodes", len(nodes))
-		glog.V(3).Infof("  found %v srvices", len(services))
+		//glog.V(3).Infof("  found %v nodes", len(nodes))
+		d.log.Info("nodes", "found", len(nodes))
+		//glog.V(3).Infof("  found %v srvices", len(services))
+		d.log.Info("services", "found", len(services))
 
 		ready := 0
 		for _, service := range services {
 			endpoints, err := d.informers.Core().V1().Endpoints().Lister().Endpoints(d.namespace.Name).Get(service.Name)
 			if err != nil {
 				if errors.IsNotFound(err) {
-					glog.V(3).Infof("  endpoint %v not found: %v", service.Name, err)
+					//glog.V(3).Infof("  endpoint %v not found: %v", service.Name, err)
+					d.log.Info("endpoint not found", "service", service.Name, "error", err)
 					continue
 				}
-				glog.V(3).Infof("  endpoint %v error: %v", service.Name, err)
+				//glog.V(3).Infof("  endpoint %v error: %v", service.Name, err)
+				d.log.Info("endpoint error", "service", service.Name, "error", err)
 				return false, err
 			}
 			for _, subset := range endpoints.Subsets {
@@ -238,7 +252,8 @@ func (d *Detective) waitForServiceEndpoints() error {
 			}
 		}
 
-		glog.V(3).Infof("  %v/%v services ready", ready, len(nodes)*2)
+		//glog.V(3).Infof("  %v/%v services ready", ready, len(nodes)*2)
+		d.log.Info("services", "ready", ready, "all", len(nodes)*2)
 		return ready == len(nodes)*2, nil
 	}, d.tomb.Dying())
 }
