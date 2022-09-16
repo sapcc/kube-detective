@@ -40,6 +40,7 @@ type Options struct {
 	TestPods        bool
 	TestServices    bool
 	TestExternalIPs bool
+	PushGateway     string
 }
 
 type Detective struct {
