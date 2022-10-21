@@ -1,13 +1,7 @@
 package detective
 
 import (
-	"bytes"
-	"context"
-	"fmt"
 	"net"
-	"os/exec"
-	"strings"
-	"time"
 
 	core "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -60,54 +54,4 @@ func inc(ip net.IP) {
 			break
 		}
 	}
-}
-
-func RunHostCmd(ctx context.Context, ns, name, cmd string) (string, error) {
-	return RunKubectl(ctx, "exec", fmt.Sprintf("--namespace=%v", ns), name, "--", "/bin/sh", "-c", cmd)
-}
-
-func RunKubectl(ctx context.Context, args ...string) (string, error) {
-	return NewKubectlCommand(ctx, args...).Exec()
-}
-
-func NewKubectlCommand(ctx context.Context, args ...string) *kubectlBuilder {
-	b := new(kubectlBuilder)
-	b.cmd = KubectlCmd(ctx, args...)
-	return b
-}
-
-func KubectlCmd(ctx context.Context, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, "kubectl", args...)
-	return cmd
-}
-
-type kubectlBuilder struct {
-	cmd     *exec.Cmd
-	timeout <-chan time.Time
-}
-
-func (b kubectlBuilder) Exec() (string, error) {
-	var stdout, stderr bytes.Buffer
-	cmd := b.cmd
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	klog.V(4).Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args[1:], " ")) // skip arg[0] as it is printed separately
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("Error starting %v:\nCommand stdout:\n%v\nstderr:\n%v\nerror:\n%v\n", cmd, cmd.Stdout, cmd.Stderr, err)
-	}
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- cmd.Wait()
-	}()
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return "", fmt.Errorf("Error running %v:\nCommand stdout:\n%v\nstderr:\n%v\nerror:\n%v\n", cmd, cmd.Stdout, cmd.Stderr, err)
-		}
-	case <-b.timeout:
-		b.cmd.Process.Kill()
-		return "", fmt.Errorf("Timed out waiting for command %v:\nCommand stdout:\n%v\nstderr:\n%v\n", cmd, cmd.Stdout, cmd.Stderr)
-	}
-	klog.V(4).Infof("stderr: %q", stderr.String())
-	return stdout.String(), nil
 }

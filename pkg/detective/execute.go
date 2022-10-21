@@ -182,6 +182,14 @@ func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 }
 
 func (d *Detective) dial(pod *core.Pod, host string, port int32) (string, error) {
-	cmd := fmt.Sprintf("wget --timeout=10 -O - http://%v:%v", host, port)
-	return RunHostCmd(d.tomb.Context(nil), d.namespace.Name, pod.Name, cmd)
+	stdout, stderr, err := d.ExecWithOptions(ExecOptions{
+		Command:            []string{"wget", "--timeout=10", "-O-", fmt.Sprintf("http://%v:%v", host, port)},
+		Namespace:          d.namespace.Name,
+		PodName:            pod.Name,
+		ContainerName:      "server",
+		CaptureStderr:      true,
+		CaptureStdout:      true,
+		PreserveWhitespace: true,
+	})
+	return stdout + stderr, err
 }
