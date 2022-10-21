@@ -1,7 +1,6 @@
 module github.com/sapcc/kube-detective
 
 require (
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	k8s.io/api v0.21.11
 	k8s.io/apimachinery v0.21.11
@@ -40,4 +39,4 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-go 1.19
+go 1.18

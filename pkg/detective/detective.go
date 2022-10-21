@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/golang/glog"
 	tomb "gopkg.in/tomb.v2"
 	core "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -17,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -40,6 +40,7 @@ type Options struct {
 	TestPods        bool
 	TestServices    bool
 	TestExternalIPs bool
+	RestConfig      *rest.Config
 }
 
 type Detective struct {
@@ -120,7 +121,7 @@ func (d *Detective) Wait() error {
 func (d *Detective) setup(opts Options) error {
 	fmt.Printf("Welcome to Detective %v\n", VERSION)
 
-	if err := d.createClient(); err != nil {
+	if err := d.createClient(opts); err != nil {
 		return err
 	}
 
@@ -226,7 +227,7 @@ func (d *Detective) execute(opts Options) error {
 }
 
 func (d *Detective) cleanup() error {
-	glog.V(2).Infof("Cleaning Up")
+	klog.V(2).Infof("Cleaning Up")
 	if d.namespace != nil {
 		return d.deleteNamespace()
 	}
@@ -248,14 +249,19 @@ func (o *Options) externalIPs() []string {
 	return ips
 }
 
-func (d *Detective) createClient() error {
-	glog.V(2).Infof("Creating Client")
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	overrides := &clientcmd.ConfigOverrides{}
+func (d *Detective) createClient(opts Options) error {
 
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides).ClientConfig()
-	if err != nil {
-		return err
+	klog.V(2).Infof("Creating Client")
+	config := opts.RestConfig
+	if config == nil {
+		rules := clientcmd.NewDefaultClientConfigLoadingRules()
+		overrides := &clientcmd.ConfigOverrides{}
+		var err error
+
+		opts.RestConfig, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides).ClientConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	client, err := kubernetes.NewForConfig(config)
@@ -265,15 +271,15 @@ func (d *Detective) createClient() error {
 
 	d.client = client
 	d.config = config
-	glog.V(3).Infof("  Host: %s", config.Host)
-	glog.V(3).Infof("  User: %s", config.Username)
-	glog.V(3).Infof("  Key:  %s", config.KeyFile)
+	klog.V(3).Infof("  Host: %s", config.Host)
+	klog.V(3).Infof("  User: %s", config.Username)
+	klog.V(3).Infof("  Key:  %s", config.KeyFile)
 
 	return nil
 }
 
 func (d *Detective) createInformers() {
-	glog.V(2).Infof("Creating Informers")
+	klog.V(2).Infof("Creating Informers")
 
 	d.informers = informers.NewSharedInformerFactoryWithOptions(d.client, InformerResyncPeriod, informers.WithNamespace(d.namespace.Name))
 	nodes := d.informers.Core().V1().Nodes().Informer()
@@ -283,6 +289,6 @@ func (d *Detective) createInformers() {
 
 	d.informers.Start(d.tomb.Dying())
 
-	glog.V(2).Infof("Waiting for Caches")
+	klog.V(2).Infof("Waiting for Caches")
 	cache.WaitForCacheSync(d.tomb.Dying(), nodes.HasSynced, pods.HasSynced, services.HasSynced, endpoints.HasSynced)
 }

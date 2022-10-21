@@ -8,12 +8,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/klog/v2"
 )
 
 // ExecOptions passed to ExecWithOptions
@@ -56,7 +56,7 @@ func (d *Detective) ExecWithOptions(options ExecOptions) (string, string, error)
 	// Here be Dragons
 	err := execute("POST", req.URL(), d.config, options.Stdin, &stdout, &stderr, tty)
 	if err != nil {
-		glog.V(3).Infof("Stream fail: %v", err)
+		klog.V(3).Infof("Stream fail: %v", err)
 	}
 
 	if options.PreserveWhitespace {
@@ -121,7 +121,7 @@ func (d *Detective) ExecShellInPodWithFullOutput(namespace, podName string, cmd 
 func execute(method string, url *url.URL, config *restclient.Config, stdin io.Reader, stdout, stderr io.Writer, tty bool) error {
 	exec, err := remotecommand.NewSPDYExecutor(config, method, url)
 	if err != nil {
-		glog.V(3).Infof("Executor fail: %v", err)
+		klog.V(3).Infof("Executor fail: %v", err)
 		return err
 	}
 	return exec.Stream(remotecommand.StreamOptions{

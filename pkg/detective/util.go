@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	core "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/klog/v2"
 )
 
 func (d *Detective) NodeIsSchedulabeleAndRunning(node *core.Node) bool {
@@ -30,7 +30,7 @@ func (d *Detective) NodeIsSchedulabeleAndRunning(node *core.Node) bool {
 
 	for _, cond := range node.Status.Conditions {
 		if cond.Type == core.NodeReady && cond.Status != core.ConditionTrue {
-			glog.V(3).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
+			klog.V(3).Infof("Ignoring node %v with %v condition status %v", node.Name, cond.Type, cond.Status)
 			return false
 		}
 	}
@@ -91,7 +91,7 @@ func (b kubectlBuilder) Exec() (string, error) {
 	cmd := b.cmd
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
-	glog.V(4).Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args[1:], " ")) // skip arg[0] as it is printed separately
+	klog.V(4).Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args[1:], " ")) // skip arg[0] as it is printed separately
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("Error starting %v:\nCommand stdout:\n%v\nstderr:\n%v\nerror:\n%v\n", cmd, cmd.Stdout, cmd.Stderr, err)
 	}
@@ -108,6 +108,6 @@ func (b kubectlBuilder) Exec() (string, error) {
 		b.cmd.Process.Kill()
 		return "", fmt.Errorf("Timed out waiting for command %v:\nCommand stdout:\n%v\nstderr:\n%v\n", cmd, cmd.Stdout, cmd.Stderr)
 	}
-	glog.V(4).Infof("stderr: %q", stderr.String())
+	klog.V(4).Infof("stderr: %q", stderr.String())
 	return stdout.String(), nil
 }

@@ -1,6 +1,6 @@
-IMAGE	:= keppel.eu-de-1.cloud.sap/ccloud/kube-detective
-DATE    = $(shell date +%Y%m%d%H%M)
-VERSION = v$(DATE) 
+IMAGE	  := keppel.eu-de-1.cloud.sap/ccloud/kube-detective
+DATE    := $(shell date +%Y%m%d%H%M)
+VERSION := v$(DATE) 
 GOOS    ?= $(shell go env GOOS)
 GOARCH  ?= $(shell go env GOARCH)
 
@@ -36,10 +36,10 @@ build:
 	docker build -t $(IMAGE):$(VERSION) .
 
 push: build
-	docker push ${IMAGE}:${VERSION}
+	docker push $(IMAGE):$(VERSION)
 
 docker-push-mac:
-	docker buildx build  --platform linux/amd64 . -t ${IMAGE}:${VERSION} --push
+	docker buildx build  --platform linux/amd64 . -t $(IMAGE):$(VERSION) --push
 
 clean: FORCE
 	rm -rf bin/*

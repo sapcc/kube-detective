@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/golang/glog"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -128,7 +128,7 @@ func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
 
 	result := "success"
 	if err != nil {
-		glog.V(3).Infof("Error: '%v'", err)
+		klog.V(3).Infof("Error: '%v'", err)
 		result = "failure"
 	}
 
@@ -146,7 +146,7 @@ func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
 
 	result := "success"
 	if err != nil {
-		glog.V(3).Infof("Error: '%s'", err)
+		klog.V(3).Infof("Error: '%s'", err)
 
 		result = "failure"
 	}
@@ -166,7 +166,7 @@ func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 
 	result := "success"
 	if err != nil {
-		glog.V(3).Infof("Error: '%s'", err)
+		klog.V(3).Infof("Error: '%s'", err)
 
 		result = "failure"
 	}
