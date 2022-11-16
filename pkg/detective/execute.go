@@ -3,15 +3,13 @@ package detective
 import (
 	"fmt"
 	"strconv"
+	"sync"
 
+	"github.com/hashicorp/go-multierror"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-)
-
-const (
-	WORKER_COUNT = 10
 )
 
 type ServiceTarget struct {
@@ -45,17 +43,61 @@ func (d *Detective) hitServices(sourceHostNetwork, targetHostNetwork bool) error
 		}
 	}
 
-	workqueue.ParallelizeUntil(d.tomb.Context(nil), WORKER_COUNT, len(services)*len(pods), func(i int) {
+	var result *multierror.Error
+	var mutex sync.Mutex
+
+	workqueue.ParallelizeUntil(d.tomb.Context(nil), d.workerCount, len(services)*len(pods), func(i int) {
 		pod := targets[i].source
 		service := targets[i].target
 		if sourceHostNetwork == pod.Spec.HostNetwork {
 			if s, err := strconv.ParseBool(service.Labels["hostNetwork"]); err == nil && targetHostNetwork == s {
-				d.dialClusterIP(pod, service)
+				err := d.dialClusterIP(pod, service)
+				mutex.Lock()
+				result = multierror.Append(result, err)
+				mutex.Unlock()
 			}
 		}
 	})
 
-	return nil
+	return result.ErrorOrNil()
+}
+
+func (d *Detective) hitServiceName() error {
+	services, err := d.informers.Core().V1().Services().Lister().Services(d.namespace.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+
+	pods, err := d.informers.Core().V1().Pods().Lister().Pods(d.namespace.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+
+	targets := []ServiceTarget{}
+	//for each pod we test a single service name resolution
+	for _, pod := range pods {
+		if !d.tomb.Alive() {
+			return fmt.Errorf("Interrupted")
+		}
+		if pod.Spec.HostNetwork { // skip host networking pods
+			continue
+		}
+		targets = append(targets, ServiceTarget{pod, services[0]})
+	}
+
+	var result *multierror.Error
+	var mutex sync.Mutex
+
+	workqueue.ParallelizeUntil(d.tomb.Context(nil), d.workerCount, len(targets), func(i int) {
+		pod := targets[i].source
+		service := targets[i].target
+		err := d.dialServiceDNS(pod, service)
+		mutex.Lock()
+		result = multierror.Append(result, err)
+		mutex.Unlock()
+	})
+
+	return result.ErrorOrNil()
 }
 
 func (d *Detective) hitExternalIP(sourceHostNetwork, targetHostNetwork bool) error {
@@ -81,17 +123,23 @@ func (d *Detective) hitExternalIP(sourceHostNetwork, targetHostNetwork bool) err
 
 	ctx := d.tomb.Context(nil)
 
-	workqueue.ParallelizeUntil(ctx, WORKER_COUNT, len(services)*len(pods), func(i int) {
+	var result *multierror.Error
+	var mutex sync.Mutex
+
+	workqueue.ParallelizeUntil(ctx, d.workerCount, len(services)*len(pods), func(i int) {
 		pod := targets[i].source
 		service := targets[i].target
 		if sourceHostNetwork == pod.Spec.HostNetwork {
 			if s, err := strconv.ParseBool(service.Labels["hostNetwork"]); err == nil && targetHostNetwork == s {
-				d.dialExternalIP(pod, service)
+				err := d.dialExternalIP(pod, service)
+				mutex.Lock()
+				result = multierror.Append(result, err)
+				mutex.Unlock()
 			}
 		}
 	})
 
-	return ctx.Err()
+	return multierror.Append(result, ctx.Err()).ErrorOrNil()
 }
 
 func (d *Detective) hitPods(sourceHostNetwork, targetHostNetwork bool) error {
@@ -111,19 +159,24 @@ func (d *Detective) hitPods(sourceHostNetwork, targetHostNetwork bool) error {
 	}
 
 	ctx := d.tomb.Context(nil)
+	var result *multierror.Error
+	var mutex sync.Mutex
 
-	workqueue.ParallelizeUntil(ctx, WORKER_COUNT, len(pods)*len(pods), func(i int) {
+	workqueue.ParallelizeUntil(ctx, d.workerCount, len(pods)*len(pods), func(i int) {
 		source := targets[i].source
 		target := targets[i].target
 		if sourceHostNetwork == source.Spec.HostNetwork && targetHostNetwork == target.Spec.HostNetwork {
-			d.dialPodIP(source, target)
+			err := d.dialPodIP(source, target)
+			mutex.Lock()
+			result = multierror.Append(result, err)
+			mutex.Unlock()
 		}
 	})
 
-	return ctx.Err()
+	return multierror.Append(result, ctx.Err()).ErrorOrNil()
 }
 
-func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
+func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) error {
 	_, err := d.dial(source, target.Status.PodIP, PodHttpPort)
 
 	result := "success"
@@ -139,9 +192,10 @@ func (d *Detective) dialPodIP(source *core.Pod, target *core.Pod) {
 		source.Status.PodIP,
 		target.Status.PodIP,
 	)
+	return err
 }
 
-func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
+func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) error {
 	_, err := d.dial(pod, service.Spec.ClusterIP, service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -159,9 +213,30 @@ func (d *Detective) dialClusterIP(pod *core.Pod, service *core.Service) {
 		service.Spec.ClusterIP,
 		service.Labels["podIP"],
 	)
+	return err
 }
 
-func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
+func (d *Detective) dialServiceDNS(pod *core.Pod, service *core.Service) error {
+	_, err := d.dial(pod, service.Name, service.Spec.Ports[0].Port)
+
+	result := "success"
+	if err != nil {
+		klog.V(3).Infof("Error: '%s'", err)
+
+		result = "failure"
+	}
+
+	fmt.Printf("[%v] %30v --> Service Name    %-15v --> %-15v --> %-15v\n",
+		result,
+		pod.Spec.NodeName,
+		pod.Status.PodIP,
+		service.Name,
+		service.Labels["podIP"],
+	)
+	return err
+}
+
+func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) error {
 	_, err := d.dial(pod, service.Spec.ExternalIPs[0], service.Spec.Ports[0].Port)
 
 	result := "success"
@@ -179,6 +254,7 @@ func (d *Detective) dialExternalIP(pod *core.Pod, service *core.Service) {
 		service.Spec.ExternalIPs[0],
 		service.Labels["podIP"],
 	)
+	return err
 }
 
 func (d *Detective) dial(pod *core.Pod, host string, port int32) (string, error) {

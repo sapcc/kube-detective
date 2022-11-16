@@ -1,6 +1,7 @@
 module github.com/sapcc/kube-detective
 
 require (
+	github.com/hashicorp/go-multierror v1.1.1
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	k8s.io/api v0.21.11
 	k8s.io/apimachinery v0.21.11
@@ -17,6 +18,7 @@ require (
 	github.com/google/go-cmp v0.5.5 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/googleapis/gnostic v0.4.1 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect

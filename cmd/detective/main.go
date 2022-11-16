@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/sapcc/kube-detective/pkg/detective"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -24,6 +25,8 @@ func init() {
 	flag.BoolVar(&opts.TestPods, "pods", true, "test pods")
 	flag.BoolVar(&opts.TestServices, "services", true, "test services")
 	flag.BoolVar(&opts.TestExternalIPs, "externalips", false, "test external IPs")
+	flag.BoolVar(&opts.TestServiceName, "service-name", true, "test service name resolution from each pod")
+	flag.IntVar(&opts.WorkerCount, "workers", 10, "Number of workers to run checks in parallel")
 	flag.StringVar(&opts.TestImage, "test-image", "gcr.io/google_containers/serve_hostname:1.2", "test external IPs")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Explicit kubeconfig (default: $KUBECONFIG)")
 	flag.StringVar(&context, "context", os.Getenv("KUBECONTEXT"), "context to use from kubeconfig (default: $KUBECONTEXT, current-context)")
@@ -54,7 +57,12 @@ func main() {
 	}()
 
 	if err := d.Wait(); err != nil {
-		fmt.Printf("Error: %v\n", err)
+		if merr, ok := err.(*multierror.Error); ok {
+			fmt.Printf("Encountered %d errors while running tests\n", merr.Len())
+		} else {
+			fmt.Printf("Error: %v\n", err)
+
+		}
 		os.Exit(1)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/hashicorp/go-multierror"
 	tomb "gopkg.in/tomb.v2"
 	core "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -34,11 +35,13 @@ const (
 )
 
 type Options struct {
+	WorkerCount     int
 	ExternalCIDR    string
 	NodeFilterRegex string
 	TestImage       string
 	TestPods        bool
 	TestServices    bool
+	TestServiceName bool
 	TestExternalIPs bool
 	RestConfig      *rest.Config
 }
@@ -51,6 +54,7 @@ type Detective struct {
 	namespace   *core.Namespace
 	externalIPs []string
 	nodeFilter  *regexp.Regexp
+	workerCount int
 
 	tomb      *tomb.Tomb
 	outerTomb *tomb.Tomb
@@ -84,6 +88,11 @@ func NewDetective(opts Options) *Detective {
 	}
 
 	d.testImage = opts.TestImage
+
+	d.workerCount = opts.WorkerCount
+	if d.workerCount < 1 {
+		d.workerCount = 10 //default to 10 parallel checks
+	}
 
 	d.tomb.Go(func() error {
 		if err := d.setup(opts); err != nil {
@@ -143,7 +152,7 @@ func (d *Detective) setup(opts Options) error {
 		return err
 	}
 
-	if opts.TestServices || opts.TestExternalIPs {
+	if opts.TestServices || opts.TestServiceName || opts.TestExternalIPs {
 		if err := d.createSevices(opts.TestExternalIPs); err != nil {
 			return err
 		}
@@ -157,73 +166,55 @@ func (d *Detective) setup(opts Options) error {
 }
 
 func (d *Detective) execute(opts Options) error {
+	var result *multierror.Error
 	if opts.TestPods {
 		fmt.Println("Pod --> Pod")
-		if err := d.hitPods(false, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitPods(false, false))
 
 		fmt.Println("Pod (hostNetwork) --> Pod")
-		if err := d.hitPods(true, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitPods(true, false))
 
 		fmt.Println("Pod  --> Pod (hostNetwork)")
-		if err := d.hitPods(false, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitPods(false, true))
 
 		fmt.Println("Pod (hostNetwork) --> Pod (hostNetwork)")
-		if err := d.hitPods(true, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitPods(true, true))
 	}
 
 	if opts.TestServices {
 		fmt.Println("Pod --> ClusterIP --> Pod")
-		if err := d.hitServices(false, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitServices(false, false))
 
 		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod")
-		if err := d.hitServices(true, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitServices(true, false))
 
 		fmt.Println("Pod --> ClusterIP --> Pod (hostNetwork)")
-		if err := d.hitServices(false, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitServices(false, true))
 
 		fmt.Println("Pod (hostNetwork) --> ClusterIP --> Pod (hostNetwork)")
-		if err := d.hitServices(true, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitServices(true, true))
+	}
+
+	if opts.TestServiceName {
+		fmt.Println("Pod --> Service Name (ClusterIP) --> Pod")
+		result = multierror.Append(result, d.hitServiceName())
 	}
 
 	if opts.TestExternalIPs {
 		fmt.Println("Pod --> ExternalIP --> Pod")
-		if err := d.hitExternalIP(false, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitExternalIP(false, false))
 
 		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod")
-		if err := d.hitExternalIP(true, false); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitExternalIP(true, false))
 
 		fmt.Println("Pod --> ExternalIP --> Pod (hostNetwork)")
-		if err := d.hitExternalIP(false, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitExternalIP(false, true))
 
 		fmt.Println("Pod (hostNetwork) --> ExternalIP --> Pod (hostNetwork)")
-		if err := d.hitExternalIP(true, true); err != nil {
-			return err
-		}
+		result = multierror.Append(result, d.hitExternalIP(true, true))
 	}
 
-	return nil
+	return result.ErrorOrNil()
 }
 
 func (d *Detective) cleanup() error {
