@@ -20,6 +20,10 @@ func (d *Detective) createNamespace() error {
 	spec := &core.Namespace{
 		ObjectMeta: meta.ObjectMeta{
 			GenerateName: "detective-",
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce":         "privileged",
+				"pod-security.kubernetes.io/enforce-version": "latest",
+			},
 		},
 		Status: core.NamespaceStatus{},
 	}
