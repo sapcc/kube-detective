@@ -6,7 +6,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 	  --mount=type=cache,target=/root/.cache/go-build \
 		make
 
-FROM alpine:3.16
+FROM alpine:3.20
 LABEL source_repository="https://github.com/sapcc/kube-detective"
 RUN apk add --no-cache \
         ca-certificates \
