@@ -6,13 +6,13 @@ require (
 	k8s.io/api v0.21.11
 	k8s.io/apimachinery v0.21.11
 	k8s.io/client-go v0.21.11
-	k8s.io/klog/v2 v2.9.0
+	k8s.io/klog/v2 v2.130.1
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/elazarl/goproxy v0.0.0-20181111060418-2ce16c963a8a // indirect
-	github.com/go-logr/logr v0.4.0 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/google/go-cmp v0.5.5 // indirect
